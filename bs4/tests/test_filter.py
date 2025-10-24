@@ -15,6 +15,7 @@ from bs4.filter import (
     AttributeValueMatchRule,
     ElementFilter,
     MatchRule,
+    SoupReplacer,
     SoupStrainer,
     StringMatchRule,
     TagNameMatchRule,
@@ -655,3 +656,23 @@ and they lived at the bottom of a well.</p>
         )
         string_soup = self.soup(html_doc, parse_only=only_short_strings)
         assert "\n\n\nElsie,\nLacie and\nTillie\n...\n" == string_soup.decode()
+
+
+class TestSoupReplacer(SoupTest):
+    def test_soupreplacer_basic(self):
+        """Test basic SoupReplacer usage: replace one tag name with another."""
+
+        replacer = SoupReplacer("foo", "bar")
+        # Check SoupReplacer initializes name_rules and alt_tag correctly
+        assert replacer.alt_tag == "bar"
+        rule = replacer.name_rule
+        # The rule should match the string 'foo'
+        assert rule.matches_string("foo")
+        assert not rule.matches_string("bar")
+
+    def test_soupreplacer_repr(self):
+
+        replacer = SoupReplacer("a", "b")
+        r = repr(replacer)
+        assert "SoupReplacer" in r
+        assert "name=" in r

@@ -33,15 +33,14 @@ __all__ = [
     "Tag",
     "TemplateString",
     "ElementFilter",
+    "SoupReplacer",
     "UnicodeDammit",
     "CData",
     "Doctype",
-
     # Exceptions
     "FeatureNotFound",
     "ParserRejectedMarkup",
     "StopParsing",
-
     # Warnings
     "AttributeResemblesVariableWarning",
     "GuessedAtParserWarning",
@@ -90,6 +89,7 @@ from .element import (
 from .formatter import Formatter
 from .filter import (
     ElementFilter,
+    SoupReplacer,
     SoupStrainer,
 )
 from typing import (
@@ -206,6 +206,8 @@ class BeautifulSoup(Tag):
     #: could not be represented in Unicode.
     contains_replacement_characters: bool
 
+    replacer: Optional[SoupReplacer]
+
     def __init__(
         self,
         markup: _IncomingMarkup = "",
@@ -215,6 +217,7 @@ class BeautifulSoup(Tag):
         from_encoding: Optional[_Encoding] = None,
         exclude_encodings: Optional[_Encodings] = None,
         element_classes: Optional[Dict[Type[PageElement], Type[PageElement]]] = None,
+        replacer: Optional[SoupReplacer] = None,
         **kwargs: Any,
     ):
         """Constructor.
@@ -435,6 +438,7 @@ class BeautifulSoup(Tag):
         self.known_xml = self.is_xml
         self._namespaces = dict()
         self.parse_only = parse_only
+        self.replacer = replacer
 
         if hasattr(markup, "read"):  # It's a file-type object.
             markup = markup.read()
@@ -1025,6 +1029,9 @@ class BeautifulSoup(Tag):
         ):
             return None
 
+        if self.replacer and self.replacer.should_be_replaced(nsprefix, name):
+            name = self.replacer.alt_tag
+
         tag_class = self.element_classes.get(Tag, Tag)
         # Assume that this is either Tag or a subclass of Tag. If not,
         # the user brought type-unsafety upon themselves.
@@ -1060,6 +1067,11 @@ class BeautifulSoup(Tag):
         """
         # print("End tag: " + name)
         self.endData()
+
+        # Apply the same replacement logic for end tags
+        if self.replacer and self.replacer.should_be_replaced(nsprefix, name):
+            name = self.replacer.alt_tag
+
         self._popToTag(name, nsprefix)
 
     def handle_data(self, data: str) -> None:

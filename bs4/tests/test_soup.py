@@ -22,7 +22,7 @@ from bs4.element import (
     Tag,
     NavigableString,
 )
-from bs4.filter import SoupStrainer
+from bs4.filter import SoupReplacer, SoupStrainer
 from bs4.exceptions import (
     ParserRejectedMarkup,
 )
@@ -133,7 +133,6 @@ class TestConstructor(SoupTest):
             # but feed() will reject both of them.
             yield markup, None, None, False
             yield markup, None, None, False
-
 
         with pytest.raises(ParserRejectedMarkup) as exc_info:
             BeautifulSoup("", builder=Mock)
@@ -463,6 +462,14 @@ class TestSelectiveParsing(SoupTest):
         strainer = SoupStrainer("b")
         soup = self.soup(markup, parse_only=strainer)
         assert soup.encode() == b"<b>Yes</b><b>Yes <c>Yes</c></b>"
+
+
+class TestSelectiveReplacing(SoupTest):
+    def test_soupreplacer_tag_replacement(self):
+        markup = "<root><a>1</a><b>2</b><a>3</a></root>"
+        replacer = SoupReplacer("a", "b")
+        soup = self.soup(markup, replacer=replacer, features="html.parser")
+        assert soup.decode() == "<root><b>1</b><b>2</b><b>3</b></root>"
 
 
 class TestNewTag(SoupTest):

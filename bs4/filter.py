@@ -680,3 +680,41 @@ class SoupStrainer(ElementFilter):
         :meta private:
         """
         return element if self.match(element) else None
+
+
+class SoupReplacer:
+    name_rule: TagNameMatchRule
+
+    def __init__(
+        self,
+        og_tag: str,
+        alt_tag: str,
+    ):
+        self.name_rule = TagNameMatchRule(string=og_tag)
+        self.alt_tag = alt_tag
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} name={self.name_rule} >"
+
+    def should_be_replaced(self, nsprefix: Optional[str], name: str) -> bool:
+        """
+        Determines if a tag with the given name (and optional namespace prefix)
+        should be replaced according to the stored name rules.
+
+        :param nsprefix: An optional namespace prefix for the tag name.
+        :param name: The base tag name to check for replacement.
+
+        Returns:
+            True if at least one name rule matches the given tag name or its namespaced variant; False otherwise.
+        """
+        prefixed_name = None
+        if nsprefix:
+            prefixed_name = f"{nsprefix}:{name}"
+
+        if self.name_rule is None:
+            return False
+        for x in name, prefixed_name:
+            if x is not None:
+                if self.name_rule.matches_string(x):
+                    return True
+        return False
