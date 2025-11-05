@@ -464,14 +464,6 @@ class TestSelectiveParsing(SoupTest):
         assert soup.encode() == b"<b>Yes</b><b>Yes <c>Yes</c></b>"
 
 
-class TestSelectiveReplacing(SoupTest):
-    def test_soupreplacer_tag_replacement(self):
-        markup = "<root><a>1</a><b>2</b><a>3</a></root>"
-        replacer = SoupReplacer("a", "b")
-        soup = self.soup(markup, replacer=replacer, features="html.parser")
-        assert soup.decode() == "<root><b>1</b><b>2</b><b>3</b></root>"
-
-
 class TestNewTag(SoupTest):
     """Test the BeautifulSoup.new_tag() method."""
 
@@ -607,3 +599,97 @@ class TestEncodingConversion(SoupTest):
         # The internal data structures can be encoded as UTF-8.
         soup_from_unicode = self.soup(self.unicode_data)
         assert soup_from_unicode.encode("utf-8") == self.utf8_data
+
+
+class TestSoupReplacer(SoupTest):
+    def test_soupreplacer_name_xformer_conditional(self):
+        html_doc = "<div><b>Bold</b> and <i>Italic</i></div>"
+        replacer = SoupReplacer(
+            name_xformer=lambda tag: "blockquote" if tag.name == "b" else tag.name
+        )
+        soup = BeautifulSoup(html_doc, replacer=replacer, features="lxml")
+        # <b> is now <blockquote>, <i> remains <i>
+        assert soup.div.blockquote is not None
+        assert soup.div.blockquote.string == "Bold"
+        assert soup.div.i is not None
+        assert soup.div.i.string == "Italic"
+        # Check the actual tag names
+        assert soup.find("blockquote") is not None
+        assert soup.find("i") is not None
+        # The <b> tag should not exist anymore
+        assert soup.find("b") is None
+
+    def test_soupreplacer_remove_class_attr(self):
+        html_doc = '<div class="outer"><span class="foo" id="s1">Hello</span><b>NoClass</b></div>'
+
+        def remove_class_attr(tag):
+            if "class" in tag.attrs:
+                del tag.attrs["class"]
+
+        replacer = SoupReplacer(xformer=remove_class_attr)
+        soup = BeautifulSoup(html_doc, replacer=replacer, features="lxml")
+
+        div = soup.div
+        # class attribute should be missing on div and span
+        assert "class" not in div.attrs
+        span = div.span
+        assert "class" not in span.attrs
+        # id attribute should remain
+        assert span["id"] == "s1"
+        # <b> didn't have class attribute; it should still be present, unchanged
+        assert div.b is not None
+        assert div.b.string == "NoClass"
+
+    def test_soupreplacer_tag_and_attrs(self):
+        # The SoupReplacer can transform tag names and attributes during parsing.
+
+        def name_xformer(tag):
+            return "x-" + tag.name
+
+        def attrs_xformer(tag):
+            attrs = tag.attrs
+            if "foo" in attrs:
+                attrs["bar"] = attrs.pop("foo")
+            return attrs
+
+        replacer = SoupReplacer(name_xformer=name_xformer, attrs_xformer=attrs_xformer)
+        markup = '<root><child foo="val">text</child></root>'
+        soup = BeautifulSoup(markup, replacer=replacer, features="lxml-xml")
+
+        # Tag names should be prefixed with 'x-'
+        tags = list(soup.find_all(True))
+        assert tags[0].name == "x-root"
+        assert tags[1].name == "x-child"
+
+        # The 'foo' attribute is renamed to 'bar'
+        child = tags[1]
+        assert "bar" in child.attrs
+        assert child.attrs["bar"] == "val"
+        assert "foo" not in child.attrs
+        assert child.string == "text"
+
+    def test_soupreplacer_with_custom_xformer(self):
+        # Custom xformer can transform tag or string nodes during parsing.
+
+        def name_xformer(tag):
+            return tag.name.upper()
+
+        def xformer(tag):
+            # 'xformer' should only operate on direct NavigableString children.
+            for child in tag.contents:
+                from bs4.element import NavigableString
+
+                if isinstance(child, NavigableString):
+                    child.replace_with(NavigableString(child[::-1]))
+
+        replacer = SoupReplacer(name_xformer=name_xformer, xformer=xformer)
+        markup = "<doc><data>abc</data></doc>"
+        soup = BeautifulSoup(markup, replacer=replacer, features="lxml-xml")
+
+        # Tag names should be uppercased
+        tags = list(soup.find_all(True))
+        assert tags[0].name == "DOC"
+        assert tags[1].name == "DATA"
+
+        # The string content is reversed
+        assert tags[1].string == "cba"

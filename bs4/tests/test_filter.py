@@ -660,19 +660,84 @@ and they lived at the bottom of a well.</p>
 
 class TestSoupReplacer(SoupTest):
     def test_soupreplacer_basic(self):
-        """Test basic SoupReplacer usage: replace one tag name with another."""
+        """Test basic SoupReplacer usage: replace tag names."""
 
-        replacer = SoupReplacer("foo", "bar")
-        # Check SoupReplacer initializes name_rules and alt_tag correctly
-        assert replacer.alt_tag == "bar"
-        rule = replacer.name_rule
-        # The rule should match the string 'foo'
-        assert rule.matches_string("foo")
-        assert not rule.matches_string("bar")
+        # Use the new SoupReplacer signature: name_xformer accepts tag, returns new name
+        def name_xformer(tag: Tag):
+            return "bar" if tag.name == "foo" else tag.name
+
+        replacer = SoupReplacer(name_xformer=name_xformer)
+
+        class DummyTag:
+            def __init__(self, name, prefix=None):
+                self.name = name
+                self.prefix = prefix
+
+        # By default, SoupReplacer stores the correct name_xformer
+        assert replacer.name_xformer is not None
+
+        # Replace name using the replacer, simulating Tag with name 'foo'
+        foo_tag = DummyTag("foo")
+        baz_tag = DummyTag("baz")
+
+        assert replacer.replace_name(foo_tag) == "bar"
+        assert replacer.replace_name(baz_tag) == "baz"
+
+    def test_soupreplacer_attrs_xformer(self):
+        """Test basic SoupReplacer usage: attrs_xformer transformation."""
+
+        def attrs_xformer(tag):
+            # Copy and add a key
+            new_attrs = dict(getattr(tag, "attrs", {}))
+            new_attrs["new"] = "value"
+            return new_attrs
+
+        replacer = SoupReplacer(attrs_xformer=attrs_xformer)
+
+        class DummyTag:
+            def __init__(self, name, attrs=None):
+                self.name = name
+                self.attrs = attrs or {}
+
+        tag = DummyTag("foo", attrs={"original": "x"})
+        replacer.formatter(tag)
+        assert tag.attrs["original"] == "x"
+        assert tag.attrs["new"] == "value"
+
+    def test_soupreplacer_xformer(self):
+        """Test basic SoupReplacer usage: xformer transformation."""
+
+        def xformer(tag):
+            tag.custom_attr = "transformed"
+
+        replacer = SoupReplacer(xformer=xformer)
+
+        class DummyTag:
+            def __init__(self, name):
+                self.name = name
+
+        tag = DummyTag("foo")
+        replacer.formatter(tag)
+        assert hasattr(tag, "custom_attr")
+        assert tag.custom_attr == "transformed"
 
     def test_soupreplacer_repr(self):
+        def dummy_name_xformer(tag):
+            return tag.name
 
-        replacer = SoupReplacer("a", "b")
+        def dummy_attrs_xformer(tag):
+            return tag.attrs
+
+        def dummy_xformer(tag):
+            pass
+
+        replacer = SoupReplacer(
+            name_xformer=dummy_name_xformer,
+            attrs_xformer=dummy_attrs_xformer,
+            xformer=dummy_xformer,
+        )
         r = repr(replacer)
         assert "SoupReplacer" in r
-        assert "name=" in r
+        assert "name_xformer=" in r
+        assert "attrs_xformer=" in r
+        assert "xformer=" in r

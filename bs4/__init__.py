@@ -796,6 +796,10 @@ class BeautifulSoup(Tag):
             # Nothing to pop. This shouldn't happen.
             return None
         tag = self.tagStack.pop()
+
+        if self.replacer and tag is not None:
+            self.replacer.formatter(tag)
+
         if tag.name in self.open_tag_counter:
             self.open_tag_counter[tag.name] -= 1
         if (
@@ -815,7 +819,6 @@ class BeautifulSoup(Tag):
 
         :meta private:
         """
-        # print("Push", tag.name)
         if self.currentTag is not None:
             self.currentTag.contents.append(tag)
         self.tagStack.append(tag)
@@ -1029,9 +1032,6 @@ class BeautifulSoup(Tag):
         ):
             return None
 
-        if self.replacer and self.replacer.should_be_replaced(nsprefix, name):
-            name = self.replacer.alt_tag
-
         tag_class = self.element_classes.get(Tag, Tag)
         # Assume that this is either Tag or a subclass of Tag. If not,
         # the user brought type-unsafety upon themselves.
@@ -1051,6 +1051,7 @@ class BeautifulSoup(Tag):
         )
         if tag is None:
             return tag
+
         if self._most_recent_element is not None:
             self._most_recent_element.next_element = tag
         self._most_recent_element = tag
@@ -1067,11 +1068,6 @@ class BeautifulSoup(Tag):
         """
         # print("End tag: " + name)
         self.endData()
-
-        # Apply the same replacement logic for end tags
-        if self.replacer and self.replacer.should_be_replaced(nsprefix, name):
-            name = self.replacer.alt_tag
-
         self._popToTag(name, nsprefix)
 
     def handle_data(self, data: str) -> None:

@@ -683,38 +683,84 @@ class SoupStrainer(ElementFilter):
 
 
 class SoupReplacer:
-    name_rule: TagNameMatchRule
+    """
+    SoupReplacer provides tag and attribute transformation for BeautifulSoup parse tree nodes.
+    It supports three types of transformers:
+        - name_xformer: Callable that transforms tag names.
+        - attrs_xformer: Callable that transforms tag attribute dictionaries.
+        - xformer: Callable applied to the Tag after it is fully constructed.
+
+    NOTE REGARDING `xformer` AND USE WITH Tag.string:
+    - Avoid mutating `tag.string` directly, as `Tag.string` is a property that *recursively* returns a NavigableString
+      from a descendant if the tag's only child is itself a Tag with string content. Modifying `tag.string` may
+      inadvertently impact nested tags' contents or result in multiple transformations of the same NavigableString.
+    - Instead, always operate on direct children:
+        - Traverse `tag.contents` and test for `isinstance(child, NavigableString)`.
+        - Use `child.replace_with(NavigableString(...))` or create a new NavigableString and replace it in place.
+          This avoids altering descendants unintentionally and ensures you only modify strings directly owned by the `Tag`.
+
+    Example (correct usage for string transformation):
+
+    ```python
+    def safe_xformer(tag):
+        for child in tag.contents:
+            if isinstance(child, NavigableString):
+                child.replace_with(NavigableString(child.upper()))
+    ```
+
+    """
+
+    name_rule: "TagNameMatchRule"
 
     def __init__(
         self,
-        og_tag: str,
-        alt_tag: str,
+        name_xformer: Optional[Callable] = None,
+        attrs_xformer: Optional[Callable] = None,
+        xformer: Optional[Callable] = None,
     ):
-        self.name_rule = TagNameMatchRule(string=og_tag)
-        self.alt_tag = alt_tag
+        self.name_xformer = name_xformer
+        self.attrs_xformer = attrs_xformer
+        self.xformer = xformer
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} name={self.name_rule} >"
+        cls_name = self.__class__.__name__
+        name = getattr(self, "name_xformer", None)
+        attrs = getattr(self, "attrs_xformer", None)
+        xformer = getattr(self, "xformer", None)
 
-    def should_be_replaced(self, nsprefix: Optional[str], name: str) -> bool:
+        return (
+            f"<{cls_name} "
+            f"name_xformer={name!r} "
+            f"attrs_xformer={attrs!r} "
+            f"xformer={xformer!r}>"
+        )
+
+    def formatter(self, tag: Tag) -> None:
+        if self.name_xformer:
+            tag.name = self.replace_name(tag)
+        if self.attrs_xformer:
+            tag.attrs = self.attrs_xformer(tag)
+        if self.xformer:
+            self.xformer(tag)
+
+    def replace_name(self, tag: Tag) -> str:
         """
-        Determines if a tag with the given name (and optional namespace prefix)
-        should be replaced according to the stored name rules.
+        Return a (potentially) replaced version of the tag name using the stored
+        name_xformer function.
 
-        :param nsprefix: An optional namespace prefix for the tag name.
-        :param name: The base tag name to check for replacement.
+        NOTE: The `name_xformer` callable should accept the tag as its sole argument
+        and return the replacement name as a string.
 
-        Returns:
-            True if at least one name rule matches the given tag name or its namespaced variant; False otherwise.
+        :param tag: The Tag to potentially rename.
+
+        :return: The transformed tag name, or the original name if no transformation is applied.
         """
-        prefixed_name = None
-        if nsprefix:
-            prefixed_name = f"{nsprefix}:{name}"
 
-        if self.name_rule is None:
-            return False
-        for x in name, prefixed_name:
-            if x is not None:
-                if self.name_rule.matches_string(x):
-                    return True
-        return False
+        prefixed_name = f"{tag.prefix}:{tag.name}" if tag.prefix else None
+        name = tag.name
+
+        if self.name_xformer is not None:
+            for x in (name, prefixed_name):
+                if x is not None:
+                    return self.name_xformer(tag)
+        return name
