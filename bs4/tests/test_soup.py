@@ -693,3 +693,56 @@ class TestSoupReplacer(SoupTest):
 
         # The string content is reversed
         assert tags[1].string == "cba"
+
+
+class TestIterableSoup(SoupTest):
+    def test_iter_iterates_over_tree(self):
+        # __iter__ of BeautifulSoup should yield all elements in a depth-first traversal, including itself.
+        markup = "<html><body><p>1</p><p>2</p><span>3</span>text</body></html>"
+        soup = self.soup(markup)
+        items = list(iter(soup))
+        # The first element yielded should be the soup itself.
+        assert items[0] is soup
+        # The next are all nodes in tree order, ignoring whitespace-only text nodes.
+        names = [el.name if isinstance(el, Tag) else str(el) for el in items]
+
+        assert names[:11] == [
+            "[document]",
+            "html",
+            "body",
+            "p",
+            "1",
+            "p",
+            "2",
+            "span",
+            "3",
+            "text",
+        ]
+
+    def test_iter_iterates_over_tag_subtree(self):
+        # __iter__ on a Tag yields itself and the subtree, depth-first
+        markup = "<p>Hello <b>world</b>!</p>"
+        soup = self.soup(markup)
+        items = list(iter(soup))
+        assert items[0] is soup
+        # The next are Hello , b, world, !
+        names = [
+            str(el) if isinstance(el, NavigableString) else el.name for el in items
+        ]
+        assert names == ["[document]", "p", "Hello ", "b", "world", "!"]
+
+    def test_iter_on_empty_tag(self):
+        # __iter__ on a tag with no children should yield itself and include the soup/document node.
+        # NOTE: HTML parser automatically converts <a/> to <a></a>.
+
+        soup = self.soup("<a/>")
+        tag = soup.a
+        items = list(iter(soup))
+        # The iterator first yields the soup/document, then the <a> tag.
+        assert items == [soup, tag]
+
+    def test_iter_on_empty_soup(self):
+        # __iter__ on empty soup yields just itself.
+        soup = self.soup("")
+        items = list(iter(soup))
+        assert items == [soup]

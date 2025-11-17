@@ -49,6 +49,7 @@ __all__ = [
     "XMLParsedAsHTMLWarning",
 ]
 
+from bs4.element import PageElement
 from collections import Counter
 import sys
 import warnings
@@ -492,6 +493,18 @@ class BeautifulSoup(Tag):
         # reference to this object.
         self.markup = None
         self.builder.soup = None
+
+    def __iter__(self) -> Iterator[PageElement]:
+        "Iterating over a Tag iterates over its contents."
+        return self.traverse(self)
+
+    def traverse(self, node):
+        yield node
+        if isinstance(node, Tag):
+            for child in getattr(node, "children", []):
+                if isinstance(child, NavigableString) and not child.strip():
+                    continue
+                yield from self.traverse(child)
 
     def copy_self(self) -> "BeautifulSoup":
         """Create a new BeautifulSoup object with the same TreeBuilder,

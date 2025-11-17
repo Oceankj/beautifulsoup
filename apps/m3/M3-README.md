@@ -4,6 +4,12 @@
 - `bs4/tests/test_filter.py`: lines 661–744
 - `bs4/tests/test_soup.py`: lines 640–695
 
+### How to Test
+```
+python -m pytest bs4/tests/test_filter.py::TestSoupReplacer
+python -m pytest bs4/tests/test_soup.py::TestSoupReplacer
+```
+
 
 ### How to run?
 ```
