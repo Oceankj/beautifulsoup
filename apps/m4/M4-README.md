@@ -11,7 +11,7 @@ python -m pytest bs4/tests/test_soup.py::TestIterableSoup
 
 ### How to run?
 ```
-cd apps/m3
+cd apps/m4
 ```
 
 ```
